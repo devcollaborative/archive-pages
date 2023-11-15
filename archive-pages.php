@@ -5,8 +5,9 @@
 	Description: Select a page to override archive page title & description.
 	Author: DevCollaborative
 	Author URI: https://devcollaborative.com/
-	Version: 1.0.0
+	Version: 1.1.0
 	Update URI: https://api.github.com/devcollaborative/archive-pages/releases/latest
+
 */
 
 defined( 'ABSPATH' ) or exit;
@@ -45,10 +46,23 @@ function archive_pages_render_settings_page() {
  * Register plugin setting options.
  */
 function archive_pages_settings_init() {
+	// Get custom post types that have public archive pages.
+	$post_types = get_post_types(array(
+		'has_archive' => true,
+		'_builtin' 		=> false,
+	), 'objects');
 
-	//section for category archives
+	/**
+	 * Register a section for our settings page.
+	 * Callback is blank
+	 */
+	add_settings_section('post_type_pages_section', 'Post Type Archives', '', 'archive-pages');
+
+	//loop through post type archives
+	archive_pages_settings_fields( $post_types, 'label', 'post_type_pages_section');
+
+	//get category archives
 	add_settings_section('category_pages_section', 'Category Archives', '', 'archive-pages');
-
 
 	//get categories
 	$categories = get_categories( array(
@@ -60,7 +74,6 @@ function archive_pages_settings_init() {
 	//loop through category archives
 	archive_pages_settings_fields( $categories, 'name', 'category_pages_section');
 
-	
 }
 add_action( 'admin_init', 'archive_pages_settings_init' );
 
@@ -161,3 +174,32 @@ function filter_archive_page_description( $description ) {
 	return $description;
 }
 add_filter( 'get_the_archive_description', 'filter_archive_page_description', 10 );
+
+
+/**
+ * Replace request for a category archive with a request for a specific page if it's been assigned and published
+ * 
+ * @param request - array of requested query variables
+ * 
+ * @link https://developer.wordpress.org/reference/hooks/request/
+ * @link https://wordpress.stackexchange.com/questions/268589/how-to-override-a-query-and-display-specific-page-by-id
+ * */
+function archive_pages_request_landing_page( $request ){
+
+	if( array_key_exists('category_name', $request ) ){
+
+		//slug is same format used in Set Archive Pages plugin 
+		$cat_slug = sanitize_title( $request['category_name'] );
+		$archive_page_id = get_option('archive_page_' . $cat_slug );
+
+		//swap out whatever was requested for the specific assigned landing page id  
+		if ( 'publish' === get_post_status( $archive_page_id ) ){
+	      unset( $request['category_name'] );
+	      $request['page_id'] = $archive_page_id;
+    	}
+  }
+  
+  return $request;
+
+}
+add_filter( 'request', 'archive_pages_request_landing_page' );
